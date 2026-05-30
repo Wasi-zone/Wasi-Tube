@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wasi-Tube Downloader</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #ff2d2d;
+    --red-glow: #ff2d2d88;
+    --dark: #0a0a0f;
+    --darker: #050508;
+    --card: #0f0f1a;
+    --border: #1e1e35;
+    --text: #e8e8ff;
+    --muted: #6666aa;
+    --accent: #ff6b35;
+    --green: #00ff88;
+    --blue: #2d8fff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--darker);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(255,45,45,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,45,45,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridMove 20s linear infinite;
+    pointer-events:none; z-index:0;
+  }
+  @keyframes gridMove { to { background-position: 40px 40px; } }
+  .orb { position:fixed; border-radius:50%; filter:blur(80px); pointer-events:none; z-index:0; animation:orbFloat 8s ease-in-out infinite; }
+  .orb1 { width:400px; height:400px; background:rgba(255,45,45,0.12); top:-100px; right:-100px; }
+  .orb2 { width:300px; height:300px; background:rgba(45,143,255,0.1); bottom:100px; left:-100px; animation-delay:3s; }
+  .orb3 { width:200px; height:200px; background:rgba(255,107,53,0.08); top:40%; left:50%; animation-delay:5s; }
+  @keyframes orbFloat { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-30px) scale(1.05)} }
+  .container { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:30px 20px; }
+  .header { text-align:center; margin-bottom:40px; animation:fadeDown .8s ease both; }
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-30px)} to{opacity:1;transform:translateY(0)} }
+  .logo-wrap { display:inline-flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .logo-icon {
+    width:52px; height:52px;
+    background:linear-gradient(135deg,var(--red),#ff6b35);
+    border-radius:14px; display:grid; place-items:center; font-size:24px;
+    box-shadow:0 0 30px var(--red-glow);
+    animation:iconPulse 2s ease-in-out infinite;
+  }
+  @keyframes iconPulse {
+    0%,100%{box-shadow:0 0 30px var(--red-glow)}
+    50%{box-shadow:0 0 60px var(--red-glow),0 0 90px rgba(255,45,45,0.3)}
+  }
+  .logo-text { font-family:'Orbitron',monospace; font-size:38px; font-weight:900; letter-spacing:2px; }
+  .logo-text .wasi { color:var(--text); }
+  .logo-text .tube { color:var(--red); text-shadow:0 0 20px var(--red-glow); }
+  .tagline { font-size:14px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
+  .platforms { display:flex; justify-content:center; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .platform-badge { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:600; letter-spacing:1px; text-transform:uppercase; border:1px solid; transition:all .3s; }
+  .platform-badge.yt  { border-color:#ff0000; color:#ff0000; }
+  .platform-badge.ig  { border-color:#e1306c; color:#e1306c; }
+  .platform-badge.fb  { border-color:#1877f2; color:#1877f2; }
+  .platform-badge.tt  { border-color:#00f2ea; color:#00f2ea; }
+  .stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; animation:fadeUp .8s .2s ease both; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; text-align:center; transition:all .3s; }
+  .stat-card:hover { border-color:rgba(255,45,45,0.4); transform:translateY(-3px); }
+  .stat-num { font-family:'Orbitron',monospace; font-size:20px; font-weight:900; color:var(--red); }
+  .stat-lbl { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:4px; }
+  .main-card {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:36px; margin-bottom:24px; animation:fadeUp .8s .3s ease both;
+    position:relative; overflow:hidden;
+  }
+  .main-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg,transparent,var(--red),var(--accent),var(--red),transparent);
+    animation:scanLine 3s ease-in-out infinite;
+  }
+  @keyframes scanLine { 0%,100%{opacity:.4} 50%{opacity:1} }
+  .input-label { font-size:13px; font-weight:600; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:12px; display:block; }
+  .url-input-wrap { display:flex; gap:12px; margin-bottom:28px; }
+  .url-input {
+    flex:1; background:var(--darker); border:1px solid var(--border); border-radius:12px;
+    padding:14px 20px; font-family:'Rajdhani',sans-serif; font-size:15px;
+    color:var(--text); outline:none; transition:all .3s;
+  }
+  .url-input:focus { border-color:var(--red); box-shadow:0 0 20px rgba(255,45,45,0.15); }
+  .url-input::placeholder { color:var(--muted); }
+  .btn-analyze {
+    background:linear-gradient(135deg,var(--red),#cc1100); border:none; border-radius:12px;
+    padding:14px 28px; font-family:'Orbitron',monospace; font-size:13px; font-weight:700;
+    color:white; cursor:pointer; letter-spacing:1px; transition:all .3s; white-space:nowrap;
+    box-shadow:0 4px 20px rgba(255,45,45,0.3);
+  }
+  .btn-analyze:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(255,45,45,0.5); }
+  .btn-analyze:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+  .format-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-top:12px; }
+  .format-btn {
+    background:var(--darker); border:1px solid var(--border); border-radius:12px;
+    padding:14px 12px; cursor:pointer; transition:all .3s; text-align:center; position:relative; overflow:hidden;
+  }
+  .format-btn::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,var(--red),var(--accent)); opacity:0; transition:opacity .3s; }
+  .format-btn.active::before { opacity:.15; }
+  .format-btn.active { border-color:var(--red); box-shadow:0 0 15px rgba(255,45,45,0.2); }
+  .format-btn:hover { transform:translateY(-2px); border-color:rgba(255,45,45,0.5); }
+  .format-icon { font-size:22px; margin-bottom:5px; position:relative; z-index:1; }
+  .format-name { font-size:13px; font-weight:700; letter-spacing:1px; position:relative; z-index:1; }
+  .format-sub { font-size:11px; color:var(--muted); position:relative; z-index:1; }
+  .preview-card {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:28px; margin-bottom:24px; display:none;
+  }
+  .preview-card.show { display:block; animation:fadeUp .5s ease both; }
+  .preview-inner { display:flex; gap:20px; align-items:flex-start; }
+  .thumb-wrap {
+    width:160px; min-width:160px; height:100px;
+    background:var(--darker); border-radius:10px; overflow:hidden;
+    border:1px solid var(--border); position:relative;
+  }
+  .thumb-wrap img { width:100%; height:100%; object-fit:cover; }
+  .thumb-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:36px; }
+  .video-info { flex:1; }
+  .video-title { font-size:16px; font-weight:700; margin-bottom:8px; line-height:1.3; }
+  .video-meta { font-size:13px; color:var(--muted); display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  .download-section { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .btn-download {
+    background:linear-gradient(135deg,var(--green),#00cc66); border:none; border-radius:12px;
+    padding:14px 32px; font-family:'Orbitron',monospace; font-size:13px; font-weight:700;
+    color:#001a0a; cursor:pointer; letter-spacing:1px; transition:all .3s;
+    box-shadow:0 4px 20px rgba(0,255,136,0.3); display:flex; align-items:center; gap:8px;
+  }
+  .btn-download:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,255,136,0.5); }
+  .btn-download:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .selected-format-tag {
+    background:rgba(255,45,45,0.1); border:1px solid rgba(255,45,45,0.3);
+    border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600;
+    color:var(--red); letter-spacing:1px;
+  }
+  .progress-wrap { display:none; }
+  .progress-wrap.show { display:block; }
+  .progress-bar-bg { background:var(--darker); border-radius:8px; height:10px; overflow:hidden; border:1px solid var(--border); }
+  .progress-bar-fill {
+    height:100%; background:linear-gradient(90deg,var(--red),var(--accent),var(--green));
+    background-size:200% 100%; border-radius:8px; width:0%; transition:width .4s ease;
+  }
+  .progress-label { font-size:12px; color:var(--muted); margin-top:8px; letter-spacing:1px; }
+  .btn-dl-file {
+    display:none; margin-top:12px;
+    background:linear-gradient(135deg,var(--blue),#0055cc); border:none; border-radius:10px;
+    padding:12px 24px; font-family:'Orbitron',monospace; font-size:12px; font-weight:700;
+    color:white; cursor:pointer; letter-spacing:1px; transition:all .3s;
+    text-decoration:none; text-align:center;
+  }
+  .btn-dl-file:hover { transform:translateY(-2px); filter:brightness(1.2); }
+  .toast {
+    position:fixed; bottom:30px; right:30px;
+    background:var(--card); border:1px solid var(--green); border-radius:12px;
+    padding:14px 20px; font-size:14px; font-weight:600; color:var(--green);
+    box-shadow:0 10px 40px rgba(0,255,136,0.2);
+    transform:translateX(200px); opacity:0; transition:all .4s cubic-bezier(0.34,1.56,0.64,1);
+    z-index:999;
+  }
+  .toast.show { transform:translateX(0); opacity:1; }
+  .toast.error { border-color:var(--red); color:var(--red); box-shadow:0 10px 40px rgba(255,45,45,0.2); }
+  .footer { text-align:center; padding:24px 0; font-size:12px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+  .footer span { color:var(--red); }
+  .dots { display:inline-flex; gap:4px; }
+  .dot { width:6px; height:6px; background:white; border-radius:50%; animation:dotBounce 1.2s ease infinite; }
+  .dot:nth-child(2) { animation-delay:.2s; }
+  .dot:nth-child(3) { animation-delay:.4s; }
+  @keyframes dotBounce { 0%,100%{transform:translateY(0);opacity:.3} 50%{transform:translateY(-6px);opacity:1} }
+  @media(max-width:600px){
+    .logo-text{font-size:26px}
+    .url-input-wrap{flex-direction:column}
+    .stats-bar{grid-template-columns:repeat(2,1fr)}
+    .preview-inner{flex-direction:column}
+    .thumb-wrap{width:100%;min-width:unset;height:160px}
+    .format-grid{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+<div class="container">
+
+  <div class="header">
+    <div class="logo-wrap">
+      <div class="logo-icon">▶</div>
+      <div class="logo-text"><span class="wasi">Wasi</span><span class="tube">Tube</span></div>
+    </div>
+    <div class="tagline">Ultimate Video &amp; Audio Downloader</div>
+    <div class="platforms">
+      <span class="platform-badge yt">▶ YouTube</span>
+      <span class="platform-badge ig">◈ Instagram</span>
+      <span class="platform-badge fb">ƒ Facebook</span>
+      <span class="platform-badge tt">♪ TikTok</span>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-num">1080p</div><div class="stat-lbl">Max Quality</div></div>
+    <div class="stat-card"><div class="stat-num">4</div><div class="stat-lbl">Platforms</div></div>
+    <div class="stat-card"><div class="stat-num">MP3</div><div class="stat-lbl">Audio Too</div></div>
+    <div class="stat-card"><div class="stat-num">FREE</div><div class="stat-lbl">Always</div></div>
+  </div>
+
+  <div class="main-card">
+    <label class="input-label">🔗 Video URL Paste Karein</label>
+    <div class="url-input-wrap">
+      <input type="url" class="url-input" id="urlInput"
+        placeholder="https://youtube.com/watch?v=... ya koi bhi link...">
+      <button class="btn-analyze" id="analyzeBtn" onclick="analyzeURL()">ANALYZE ⚡</button>
+    </div>
+
+    <div class="format-section">
+      <label class="input-label">📥 Format Chunein</label>
+      <div class="format-grid">
+        <div class="format-btn active" onclick="selectFormat(this,'1080p')">
+          <div class="format-icon">🎬</div>
+          <div class="format-name">1080p</div>
+          <div class="format-sub">Full HD</div>
+        </div>
+        <div class="format-btn" onclick="selectFormat(this,'720p')">
+          <div class="format-icon">🎥</div>
+          <div class="format-name">720p</div>
+          <div class="format-sub">HD</div>
+        </div>
+        <div class="format-btn" onclick="selectFormat(this,'480p')">
+          <div class="format-icon">📹</div>
+          <div class="format-name">480p</div>
+          <div class="format-sub">Standard</div>
+        </div>
+        <div class="format-btn" onclick="selectFormat(this,'mp3')">
+          <div class="format-icon">🎵</div>
+          <div class="format-name">MP3</div>
+          <div class="format-sub">Audio Only</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-card" id="previewCard">
+    <label class="input-label" id="platformLabel">📺 Video Info</label>
+    <div class="preview-inner">
+      <div class="thumb-wrap" id="thumbWrap">
+        <div class="thumb-placeholder" id="thumbPlaceholder">▶</div>
+      </div>
+      <div class="video-info">
+        <div class="video-title" id="videoTitle">–</div>
+        <div class="video-meta">
+          <span>⏱ <span id="videoDuration">–</span></span>
+          <span>👁 <span id="videoViews">–</span></span>
+          <span>👤 <span id="videoUploader">–</span></span>
+        </div>
+        <div class="download-section">
+          <button class="btn-download" id="dlBtn" onclick="startDownload()">⬇ DOWNLOAD</button>
+          <div class="selected-format-tag" id="fmtTag">1080p • MP4</div>
+        </div>
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-label" id="progressLabel">Tayyar ho raha hai...</div>
+        </div>
+        <a class="btn-dl-file" id="dlFileBtn" href="#" download>💾 File Save Karein</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="footer">Made with ❤️ by <span>Wasi</span> &nbsp;|&nbsp; All Platforms Supported</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE = "";  // same-origin (Flask serves this file)
+let selectedFormat = "1080p";
+let currentJobId = null;
+let pollTimer = null;
+
+function selectFormat(el, fmt) {
+  document.querySelectorAll(".format-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  selectedFormat = fmt;
+  updateFmtTag();
+}
+
+function updateFmtTag() {
+  const tag = document.getElementById("fmtTag");
+  if (selectedFormat === "mp3") {
+    tag.textContent = "MP3 • Audio Only";
+    tag.style.color = "#00ff88";
+    tag.style.borderColor = "rgba(0,255,136,0.4)";
+  } else {
+    tag.textContent = `${selectedFormat} • MP4`;
+    tag.style.color = "var(--red)";
+    tag.style.borderColor = "rgba(255,45,45,0.3)";
+  }
+}
+
+async function analyzeURL() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) { showToast("⚠️ Pehle URL paste karein!", true); return; }
+
+  const btn = document.getElementById("analyzeBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+
+  try {
+    const res = await fetch(`${BASE}/api/info`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+
+    if (!res.ok) { showToast("❌ " + (data.error || "Error aaya!"), true); return; }
+
+    // Populate preview
+    document.getElementById("videoTitle").textContent    = data.title || "–";
+    document.getElementById("videoDuration").textContent = data.duration || "–";
+    document.getElementById("videoViews").textContent    = data.view_count || "–";
+    document.getElementById("videoUploader").textContent = data.uploader || "–";
+
+    const thumbWrap = document.getElementById("thumbWrap");
+    const ph = document.getElementById("thumbPlaceholder");
+    if (data.thumbnail) {
+      let img = thumbWrap.querySelector("img");
+      if (!img) { img = document.createElement("img"); thumbWrap.appendChild(img); }
+      img.src = data.thumbnail;
+      ph.style.display = "none";
+    }
+
+    const icons = { youtube:"📺", instagram:"📸", facebook:"📘", tiktok:"🎵" };
+    const names = { youtube:"YouTube", instagram:"Instagram", facebook:"Facebook", tiktok:"TikTok" };
+    document.getElementById("platformLabel").textContent = `${icons[data.platform]||"🎬"} ${names[data.platform]||"Video"}`;
+
+    resetDownload();
+    updateFmtTag();
+    document.getElementById("previewCard").classList.add("show");
+    document.getElementById("previewCard").scrollIntoView({ behavior:"smooth", block:"nearest" });
+    showToast("✅ Video mil gaya!");
+
+  } catch(e) {
+    showToast("❌ Server se connect nahi hua. Server chalao: python server.py", true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "ANALYZE ⚡";
+  }
+}
+
+async function startDownload() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) return;
+
+  const dlBtn = document.getElementById("dlBtn");
+  dlBtn.disabled = true;
+  dlBtn.textContent = "⏳ Shuru ho raha...";
+
+  document.getElementById("progressWrap").classList.add("show");
+  document.getElementById("dlFileBtn").style.display = "none";
+  setProgress(0, "Download shuru ho raha hai...");
+
+  try {
+    const res = await fetch(`${BASE}/api/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, format: selectedFormat })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast("❌ " + (data.error || "Error!"), true); resetDownload(); return; }
+
+    currentJobId = data.job_id;
+    pollProgress();
+
+  } catch(e) {
+    showToast("❌ Server se connect nahi hua!", true);
+    resetDownload();
+  }
+}
+
+function pollProgress() {
+  if (!currentJobId) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch(`${BASE}/api/progress/${currentJobId}`);
+      const data = await res.json();
+
+      if (data.status === "downloading") {
+        setProgress(data.percent, `Downloading... ${Math.round(data.percent)}%`);
+      } else if (data.status === "done") {
+        clearInterval(pollTimer);
+        setProgress(100, "✅ Download mukammal hua!");
+        document.getElementById("progressLabel").style.color = "#00ff88";
+        showToast("🎉 File tayar hai!");
+        const dlFileBtn = document.getElementById("dlFileBtn");
+        dlFileBtn.href = `${BASE}/api/file/${encodeURIComponent(data.filename)}`;
+        dlFileBtn.style.display = "inline-block";
+        document.getElementById("dlBtn").textContent = "⬇ DOWNLOAD";
+        document.getElementById("dlBtn").disabled = false;
+      } else if (data.status === "error") {
+        clearInterval(pollTimer);
+        showToast("❌ " + (data.error || "Download fail hua"), true);
+        setProgress(0, "❌ Error aaya. Dubara koshish karein.");
+        document.getElementById("dlBtn").textContent = "⬇ DOWNLOAD";
+        document.getElementById("dlBtn").disabled = false;
+      }
+    } catch(e) {
+      clearInterval(pollTimer);
+    }
+  }, 800);
+}
+
+function setProgress(pct, label) {
+  document.getElementById("progressFill").style.width = pct + "%";
+  document.getElementById("progressLabel").textContent = label;
+  document.getElementById("progressLabel").style.color = "";
+}
+
+function resetDownload() {
+  clearInterval(pollTimer);
+  currentJobId = null;
+  document.getElementById("progressWrap").classList.remove("show");
+  document.getElementById("dlFileBtn").style.display = "none";
+  const dlBtn = document.getElementById("dlBtn");
+  dlBtn.disabled = false;
+  dlBtn.textContent = "⬇ DOWNLOAD";
+}
+
+function showToast(msg, isError=false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast" + (isError ? " error" : "");
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3500);
+}
+
+document.getElementById("urlInput").addEventListener("keypress", e => {
+  if (e.key === "Enter") analyzeURL();
+});
+</script>
+</body>
+</html>
